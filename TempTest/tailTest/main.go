@@ -3,12 +3,10 @@ package main
 import (
 	"fmt"
 	"github.com/hpcloud/tail"
-	"os"
 	"time"
 )
 
 func main() {
-	fmt.Println(os.Getwd())
 	filename := "./xx.log"
 	config := tail.Config{
 		Follow:    true,

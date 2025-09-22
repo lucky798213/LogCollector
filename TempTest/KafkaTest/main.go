@@ -6,6 +6,8 @@ import (
 )
 
 // bin\windows\kafka-server-start.bat config\server.properties
+// bin\windows\kafka-console-consumer.bat
+
 // 启动命令
 func main() {
 	//生产者配置

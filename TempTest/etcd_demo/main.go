@@ -40,4 +40,17 @@ func main() {
 			fmt.Printf("键: %s, 值: %s\n", kv.Key, kv.Value)
 		}
 	}
+
+	// 监听键 "name" 的变化
+	rch := cli.Watch(context.Background(), "name")
+	fmt.Println("开始监听键 name 的变化...")
+
+	// 从通道循环读取变更事件
+	for wresp := range rch {
+		for _, ev := range wresp.Events {
+			// 打印事件类型（PUT/DELETE）、键、值
+			fmt.Printf("事件类型: %s, 键: %s, 值: %s\n",
+				ev.Type, ev.Kv.Key, ev.Kv.Value)
+		}
+	}
 }

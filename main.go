@@ -4,12 +4,8 @@ import (
 	"LogCollector/Kafka"
 	"LogCollector/etcd"
 	"LogCollector/tailfile"
-	"fmt"
-	"github.com/IBM/sarama"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/ini.v1"
-	"strings"
-	"time"
 )
 
 type Config struct {
@@ -32,32 +28,8 @@ type EtcdConfig struct {
 	CollectKey string `ini:"collect_key"`
 }
 
-// 真正的业务逻辑
-func run() (err error) {
-	for {
-		//循环读取数据
-		line, ok := <-tailfile.TailObj.Lines
-		//是空行就略过
-		if len(strings.Trim(line.Text, "\r")) == 0 {
-			logrus.Info("出现空行，直接跳过")
-			continue
-		}
-		if !ok {
-			logrus.Warn("tail file close reopen, filename:%s\n", tailfile.TailObj.Filename)
-			time.Sleep(time.Second)
-			continue
-		}
-		//包装成Kafka中的msg类型
-		msg := &sarama.ProducerMessage{}
-		msg.Topic = "web_log"
-		msg.Value = sarama.StringEncoder("this is a test")
-
-		//丢到通道中
-		Kafka.ToMsgChan(msg)
-
-		//将消息放进Kafka
-		fmt.Println(line.Text)
-	}
+func run() {
+	select {}
 }
 
 func main() {
@@ -89,14 +61,13 @@ func main() {
 		logrus.Errorf("get conf from etcd failed,err:%v", err)
 		return
 	}
-	fmt.Println(allConf)
 
 	//初始化tail
-	tailfile.Init(configObj.LogFilePath)
-	logrus.Info("tailfile init success")
-
-	err = run()
+	err = tailfile.Init(allConf) //把获取到的日志配置项放入tail中
 	if err != nil {
-		logrus.Errorf("run failed,err:%v", err)
+		logrus.Errorf("init tailfile failed,err:%v", err)
+		return
 	}
+	logrus.Info("tailfile init success")
+	run()
 }

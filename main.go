@@ -7,6 +7,7 @@ import (
 	"github.com/IBM/sarama"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/ini.v1"
+	"strings"
 	"time"
 )
 
@@ -30,6 +31,11 @@ func run() (err error) {
 	for {
 		//循环读取数据
 		line, ok := <-tailfile.TailObj.Lines
+		//是空行就略过
+		if len(strings.Trim(line.Text, "\r")) == 0 {
+			logrus.Info("出现空行，直接跳过")
+			continue
+		}
 		if !ok {
 			logrus.Warn("tail file close reopen, filename:%s\n", tailfile.TailObj.Filename)
 			time.Sleep(time.Second)
@@ -41,8 +47,8 @@ func run() (err error) {
 		msg.Value = sarama.StringEncoder("this is a test")
 
 		//丢到通道中
-		Kafka.MsgChan <- msg
- 
+		Kafka.ToMsgChan(msg)
+
 		//将消息放进Kafka
 		fmt.Println(line.Text)
 	}

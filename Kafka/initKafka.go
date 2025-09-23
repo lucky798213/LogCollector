@@ -7,7 +7,7 @@ import (
 )
 
 var client sarama.SyncProducer
-var MsgChan chan *sarama.ProducerMessage
+var msgChan chan *sarama.ProducerMessage
 
 func Init(addr []string, chanSize int64) (err error) {
 	//生产者配置
@@ -23,7 +23,7 @@ func Init(addr []string, chanSize int64) (err error) {
 		return err
 	}
 
-	MsgChan = make(chan *sarama.ProducerMessage, chanSize)
+	msgChan = make(chan *sarama.ProducerMessage, chanSize)
 
 	//起一个后台的goroutine 从msgchan中读数据
 	go sendMsg()
@@ -35,7 +35,7 @@ func Init(addr []string, chanSize int64) (err error) {
 func sendMsg() {
 	for {
 		select {
-		case msg := <-MsgChan:
+		case msg := <-msgChan:
 			pid, offset, err := client.SendMessage(msg)
 			if err != nil {
 				logrus.Warning("send message err:", err)
@@ -44,4 +44,8 @@ func sendMsg() {
 			logrus.Info(fmt.Sprintf("pid:%v offset:%v\n", pid, offset))
 		}
 	}
+}
+
+func ToMsgChan(msg *sarama.ProducerMessage) {
+	msgChan <- msg
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"LogCollector/Kafka"
+	"LogCollector/etcd"
 	"LogCollector/tailfile"
 	"fmt"
 	"github.com/IBM/sarama"
@@ -14,16 +15,21 @@ import (
 type Config struct {
 	KafkaConfig   `ini:"kafka"`
 	CollectConfig `ini:"collect"`
+	EtcdConfig    `ini:"etcd"`
 }
 
 type KafkaConfig struct {
 	Address  string `ini:"address"`
-	Topic    string `ini:"topic"`
 	ChanSize int64  `ini:"chan_size"`
 }
 
 type CollectConfig struct {
 	LogFilePath string `ini:"logfile_path"`
+}
+
+type EtcdConfig struct {
+	Address    string `ini:"address"`
+	CollectKey string `ini:"collect_key"`
 }
 
 // 真正的业务逻辑
@@ -59,17 +65,31 @@ func main() {
 	//读取配置
 	err := ini.MapTo(configObj, "./conf/config.ini")
 	if err != nil {
-		logrus.Error("load config file failed,err:%v", err)
+		logrus.Errorf("load config file failed,err:%v", err)
 		return
 	}
 
 	//初始化Kafka
-	err = Kafka.Init([]string{configObj.Address}, configObj.ChanSize)
+	err = Kafka.Init([]string{configObj.KafkaConfig.Address}, configObj.ChanSize)
 	if err != nil {
-		logrus.Error("init kafka failed,err:%v", err)
+		logrus.Errorf("init kafka failed,err:%v", err)
 		return
 	}
 	logrus.Info("init kafka success")
+
+	//初始化etcd连接
+	err = etcd.Init([]string{configObj.EtcdConfig.Address})
+	if err != nil {
+		logrus.Errorf("init etcd failed,err:%v", err)
+		return
+	}
+	//从etcd中拉取要收集日志的配置项
+	allConf, err := etcd.GetConf(configObj.EtcdConfig.CollectKey)
+	if err != nil {
+		logrus.Errorf("get conf from etcd failed,err:%v", err)
+		return
+	}
+	fmt.Println(allConf)
 
 	//初始化tail
 	tailfile.Init(configObj.LogFilePath)
@@ -77,6 +97,6 @@ func main() {
 
 	err = run()
 	if err != nil {
-		logrus.Error("run failed,err:%v", err)
+		logrus.Errorf("run failed,err:%v", err)
 	}
 }

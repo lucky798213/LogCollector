@@ -2,6 +2,7 @@ package etcd
 
 import (
 	"LogCollector/common"
+	"LogCollector/tailfile"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -50,4 +51,29 @@ func GetConf(key string) (collectEntryList []common.CollectEntry, err error) {
 		return
 	}
 	return
+}
+
+func WatchConf(key string) {
+	for {
+		watchChan := client.Watch(context.Background(), key)
+
+		for wresp := range watchChan {
+			for _, ev := range wresp.Events {
+				fmt.Printf(ev.Type.String())
+				var newConf []common.CollectEntry
+				if ev.Type == clientv3.EventTypeDelete {
+					//如果是删除的事件
+					logrus.Warning("warning:etcd delete the key")
+					tailfile.SendNewConf(newConf)
+					continue
+				}
+				err := json.Unmarshal(ev.Kv.Value, &newConf)
+				if err != nil {
+					logrus.Errorf("unmarshal config from etcd by key :%s failed,err:%v", key, err)
+					continue
+				}
+				tailfile.SendNewConf(newConf)
+			}
+		}
+	}
 }

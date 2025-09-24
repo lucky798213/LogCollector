@@ -62,6 +62,8 @@ func main() {
 		return
 	}
 
+	//派一个watch去检测configObj.EtcdConfig.CollectKey有无发生变化
+
 	//初始化tail
 	err = tailfile.Init(allConf) //把获取到的日志配置项放入tail中
 	if err != nil {

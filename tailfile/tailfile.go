@@ -2,7 +2,7 @@ package tailfile
 
 import (
 	"LogCollector/Kafka"
-	"LogCollector/common"
+	"context"
 	"github.com/IBM/sarama"
 	"github.com/hpcloud/tail"
 	"github.com/sirupsen/logrus"
@@ -11,15 +11,20 @@ import (
 )
 
 type tailTask struct {
-	path  string
-	topic string
-	tObj  *tail.Tail
+	path   string
+	topic  string
+	tObj   *tail.Tail
+	ctx    context.Context
+	cancel context.CancelFunc
 }
 
 func newTailTask(path, topic string) *tailTask {
+	ctx, cancel := context.WithCancel(context.Background())
 	tt := &tailTask{
-		path:  path,
-		topic: topic,
+		path:   path,
+		topic:  topic,
+		ctx:    ctx,
+		cancel: cancel,
 	}
 
 	return tt
@@ -39,41 +44,29 @@ func (tt *tailTask) Init() (err error) {
 
 func (tt *tailTask) run() {
 	for {
-		//循环读取数据
-		line, ok := <-tt.tObj.Lines
-		//是空行就略过
-		if len(strings.Trim(line.Text, "\r")) == 0 {
-			logrus.Info("出现空行，直接跳过")
-			continue
-		}
-		if !ok {
-			logrus.Warn("tail file close reopen, filename:%s\n", tt.path)
-			time.Sleep(time.Second)
-			continue
-		}
-		//包装成Kafka中的msg类型
-		msg := &sarama.ProducerMessage{}
-		msg.Topic = tt.topic
-		msg.Value = sarama.StringEncoder(line.Text)
+		select {
+		case <-tt.ctx.Done():
+			logrus.Infof("task collect path:%s need to stop", tt.path)
+			return
+		case line, ok := <-tt.tObj.Lines:
+			//循环读取数据
+			//是空行就略过
+			if len(strings.Trim(line.Text, "\r")) == 0 {
+				logrus.Info("出现空行，直接跳过")
+				continue
+			}
+			if !ok {
+				logrus.Warn("tail file close reopen, filename:%s\n", tt.path)
+				time.Sleep(time.Second)
+				continue
+			}
+			//包装成Kafka中的msg类型
+			msg := &sarama.ProducerMessage{}
+			msg.Topic = tt.topic
+			msg.Value = sarama.StringEncoder(line.Text)
 
-		//丢到通道中
-		Kafka.ToMsgChan(msg)
-
+			//丢到通道中
+			Kafka.ToMsgChan(msg)
+		}
 	}
-}
-
-func Init(allConf []common.CollectEntry) (err error) {
-	//allConf中存了若干个日志的收集项
-	//针对每一个日志收集项创建一个对应的tailObj
-	for _, conf := range allConf {
-		tt := newTailTask(conf.Path, conf.Topic)
-		err := tt.Init()
-		if err != nil {
-			logrus.Errorf("create tailObj for path:%s failed,err:%v", conf.Path, err)
-			continue
-		}
-		go tt.run()
-	}
-
-	return
 }
